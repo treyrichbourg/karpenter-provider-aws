@@ -42,12 +42,25 @@ var DefaultEBS = v1.BlockDevice{
 	VolumeSize: lo.ToPtr(resource.MustParse("20Gi")),
 }
 
+var httpProtocolUnsupportedRegions = map[string]struct {
+	HttpProtocolUnsupported bool
+}{
+	"us-iso-east-1":   {HttpProtocolUnsupported: true},
+	"us-iso-west-1":   {HttpProtocolUnsupported: true},
+	"us-isob-east-1":  {HttpProtocolUnsupported: true},
+	"us-isob-west-1":  {HttpProtocolUnsupported: true},
+	"us-isof-south-1": {HttpProtocolUnsupported: true},
+	"us-isof-east-1":  {HttpProtocolUnsupported: true},
+}
+
 type Resolver interface {
 	Resolve(*v1.EC2NodeClass, *karpv1.NodeClaim, []*cloudprovider.InstanceType, string, *Options) ([]*LaunchTemplate, error)
 }
 
 // DefaultResolver is able to fill-in dynamic launch template parameters
-type DefaultResolver struct{}
+type DefaultResolver struct {
+	region string
+}
 
 // Options define the static launch template parameters
 type Options struct {
@@ -117,8 +130,10 @@ func (d DefaultFamily) FeatureFlags() FeatureFlags {
 }
 
 // NewDefaultResolver constructs a new launch template DefaultResolver
-func NewDefaultResolver() *DefaultResolver {
-	return &DefaultResolver{}
+func NewDefaultResolver(region string) *DefaultResolver {
+	return &DefaultResolver{
+		region: region,
+	}
 }
 
 // Resolve generates launch templates using the static options and dynamically generates launch template parameters.
@@ -297,6 +312,9 @@ func (r DefaultResolver) resolveLaunchTemplates(
 		}
 		if resolved.MetadataOptions == nil {
 			resolved.MetadataOptions = amiFamily.DefaultMetadataOptions()
+		}
+		if httpProtocolUnsupported, ok := httpProtocolUnsupportedRegions[r.region]; ok && httpProtocolUnsupported.HttpProtocolUnsupported {
+			resolved.MetadataOptions.HTTPProtocolIPv6 = nil
 		}
 		return resolved
 	})
